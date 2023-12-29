@@ -7,10 +7,15 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    fenix = {
+          url = "github:nix-community/fenix";
+          inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     systems.url = "github:nix-systems/default";
   };
 
-  outputs = inputs@{ flake-parts, crane, nixpkgs, self, ... }: flake-parts.lib.mkFlake { inherit inputs; } {
+  outputs = inputs@{ flake-parts, crane, fenix, nixpkgs, self, ... }: flake-parts.lib.mkFlake { inherit inputs; } {
     systems = import inputs.systems;
 
     imports = [
@@ -90,6 +95,12 @@
         packages = {
           default = typst;
           typst-dev = self'.packages.default;
+          intellij-env = pkgs.buildEnv {
+                                       name = "intelliJ rust environment";
+                                       paths = [fenix.packages.x86_64-linux.latest.rustc
+                                                fenix.packages.x86_64-linux.latest.cargo
+                                                fenix.packages.x86_64-linux.latest.rust-src];
+                                      };
         };
 
         overlayAttrs = builtins.removeAttrs self'.packages [ "default" ];
