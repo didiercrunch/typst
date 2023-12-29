@@ -1,6 +1,8 @@
+use std::time::Duration;
 use comemo::TrackedMut;
 use ecow::{eco_format, eco_vec, EcoString};
 use serde::{Deserialize, Serialize};
+use url::Url;
 
 use crate::diag::{
     bail, error, warning, At, FileError, SourceResult, StrResult, Trace, Tracepoint,
@@ -20,7 +22,6 @@ impl Eval for ast::ModuleImport<'_> {
         let mut source = source.eval(vm)?;
         let new_name = self.new_name();
         let imports = self.imports();
-
         match &source {
             Value::Func(func) => {
                 if func.scope().is_none() {
@@ -153,9 +154,38 @@ fn import_package(vm: &mut Vm, spec: PackageSpec, span: Span) -> SourceResult<Mo
     .with_name(manifest.package.name))
 }
 
+const SUPPORTED_SCHEMATA: [&str; 2] = ["http", "https"];
+
+fn download_file_id_url(path: &str) -> SourceResult<&str>{
+    if Url::parse(path).is_err() {
+        println!("This is not an valid url.. this is strange. {}", path);
+        return Ok(path);
+    }
+    let url = Url::parse(path).unwrap();
+    if !SUPPORTED_SCHEMATA.contains(&url.scheme()) {
+        println!("invalid url schema {}", url.scheme());
+        return Ok(path);
+    }
+
+    let agent: Agent = ureq::AgentBuilder::new()
+        .timeout_read(Duration::from_secs(5))
+        .timeout_write(Duration::from_secs(5))
+        .build();
+
+    let body: String = agent.get(path)
+        .call()?
+        .into_string()?;
+
+    println!("this is a valid url?! {}", path);
+    Ok("")
+
+}
+
 /// Import a file from a path.
 fn import_file(vm: &mut Vm, path: &str, span: Span) -> SourceResult<Module> {
     // Load the source file.
+    download_file_id_url(path)?;
+
     let world = vm.world();
     let id = span.resolve_path(path).at(span)?;
     let source = world.source(id).at(span)?;

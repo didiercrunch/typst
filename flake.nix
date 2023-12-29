@@ -112,8 +112,10 @@
 
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
-            rustc
-            cargo
+            fenix.packages.x86_64-linux.latest.rustc
+            fenix.packages.x86_64-linux.latest.cargo
+            fenix.packages.x86_64-linux.latest.rust-src
+            openssl
           ];
 
           buildInputs = lib.optionals pkgs.stdenv.isDarwin [
