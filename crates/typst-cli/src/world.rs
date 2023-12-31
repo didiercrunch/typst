@@ -312,6 +312,8 @@ impl<T: Clone> SlotCell<T> {
     }
 }
 
+
+// todo: download file if not present.
 /// Resolves the path of a file id on the system, downloading a package if
 /// necessary.
 fn system_path(project_root: &Path, id: FileId) -> FileResult<PathBuf> {

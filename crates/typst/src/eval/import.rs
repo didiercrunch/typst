@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::path::Path;
 use comemo::TrackedMut;
 use ecow::{eco_format, eco_vec, EcoString};
 use serde::{Deserialize, Serialize};
@@ -8,6 +8,7 @@ use crate::diag::{
     bail, error, warning, At, FileError, SourceResult, StrResult, Trace, Tracepoint,
 };
 use crate::eval::{eval, Eval, Vm};
+use crate::eval::importurl::HTTPRemoteAssetFetcher;
 use crate::foundations::{Content, Module, Value};
 use crate::syntax::ast::{self, AstNode};
 use crate::syntax::{FileId, PackageSpec, PackageVersion, Span, VirtualPath};
@@ -156,35 +157,28 @@ fn import_package(vm: &mut Vm, spec: PackageSpec, span: Span) -> SourceResult<Mo
 
 const SUPPORTED_SCHEMATA: [&str; 2] = ["http", "https"];
 
-fn download_file_id_url(path: &str) -> SourceResult<&str>{
+fn download_file_id_url(path: &str) -> StrResult<()>{
     if Url::parse(path).is_err() {
         println!("This is not an valid url.. this is strange. {}", path);
-        return Ok(path);
+        return Ok(());
     }
     let url = Url::parse(path).unwrap();
     if !SUPPORTED_SCHEMATA.contains(&url.scheme()) {
         println!("invalid url schema {}", url.scheme());
-        return Ok(path);
+        return Ok(());
     }
 
-    let agent: Agent = ureq::AgentBuilder::new()
-        .timeout_read(Duration::from_secs(5))
-        .timeout_write(Duration::from_secs(5))
-        .build();
+    let fetcher = HTTPRemoteAssetFetcher::new(Path::new("/tmp/toto"));
+    fetcher.fetch(&url)?;
 
-    let body: String = agent.get(path)
-        .call()?
-        .into_string()?;
-
-    println!("this is a valid url?! {}", path);
-    Ok("")
+    Ok(())
 
 }
 
 /// Import a file from a path.
 fn import_file(vm: &mut Vm, path: &str, span: Span) -> SourceResult<Module> {
     // Load the source file.
-    download_file_id_url(path)?;
+    download_file_id_url(path).at(span)?;
 
     let world = vm.world();
     let id = span.resolve_path(path).at(span)?;

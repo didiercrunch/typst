@@ -5,6 +5,8 @@ use std::fmt::{self, Debug, Display, Formatter};
 use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 use std::sync::RwLock;
+use url::Url;
+
 
 use ecow::{eco_format, EcoString};
 use once_cell::sync::Lazy;
@@ -68,8 +70,20 @@ impl FileId {
         &self.pair().1
     }
 
+    fn is_remote(&self, path: &str) -> bool{
+        if let Ok(url) = Url::parse(path){
+            url.scheme() == "http" || url.scheme() == "https"
+        }else{
+            false
+        }
+    }
+
     /// Resolve a file location relative to this file.
     pub fn join(self, path: &str) -> Self {
+        if self.is_remote(path) {
+            return Self::new(Some(REMOTE_PACKAGE), VirtualPath::new(path));
+        }
+
         Self::new(self.package().cloned(), self.vpath().join(path))
     }
 
@@ -325,3 +339,9 @@ impl<'de> Deserialize<'de> for PackageVersion {
         string.parse().map_err(serde::de::Error::custom)
     }
 }
+
+pub const REMOTE_PACKAGE: PackageSpec = PackageSpec{
+    namespace: EcoString::inline("typst-internals"),
+    name: EcoString::inline("remote"),
+    version: PackageVersion{major: 1,minor: 0, patch: 1},
+};

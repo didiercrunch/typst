@@ -13,6 +13,7 @@ mod math;
 mod rules;
 mod tracer;
 mod vm;
+mod importurl;
 
 pub use self::call::*;
 pub use self::import::*;
