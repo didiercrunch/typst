@@ -5,12 +5,11 @@ use std::fmt::{self, Debug, Display, Formatter};
 use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 use std::sync::RwLock;
-use url::Url;
-
 
 use ecow::{eco_format, EcoString};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use url::Url;
 
 use crate::is_ident;
 
@@ -70,10 +69,10 @@ impl FileId {
         &self.pair().1
     }
 
-    fn is_remote(&self, path: &str) -> bool{
-        if let Ok(url) = Url::parse(path){
+    fn is_remote(&self, path: &str) -> bool {
+        if let Ok(url) = Url::parse(path) {
             url.scheme() == "http" || url.scheme() == "https"
-        }else{
+        } else {
             false
         }
     }
@@ -202,6 +201,80 @@ impl VirtualPath {
 impl Debug for VirtualPath {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         Display::fmt(&self.0.display(), f)
+    }
+}
+
+#[cfg(test)]
+mod tests_virtual_path {
+    use super::*;
+
+    #[test]
+    fn absolute_paths() {
+        let vp = VirtualPath::new("/tmp/a/b/c/d.txt");
+        assert_eq!(Path::new("tmp/a/b/c/d.txt"),  vp.as_rootless_path());
+        assert_eq!(Path::new("/tmp/a/b/c/d.txt"),  vp.as_rooted_path());
+
+        let vp1 = VirtualPath::new("/tmp/a/b/c");
+        assert_eq!(Path::new("/tmp/a/b/c/"),  vp1.as_rooted_path());
+
+        let vp2 = VirtualPath::new("/tmp/a/b/c/");
+        assert_eq!(Path::new("/tmp/a/b/c/"),  vp2.as_rooted_path());
+    }
+
+    #[test]
+    fn relative_paths() {
+        let vp = VirtualPath::new("c/d.txt");
+        assert_eq!(Path::new("c/d.txt"),  vp.as_rootless_path());
+        assert_eq!(Path::new("/c/d.txt"),  vp.as_rooted_path());
+
+        let vp2 = VirtualPath::new("./c/d.txt");
+        assert_eq!(Path::new("c/d.txt"),  vp2.as_rootless_path());
+        assert_eq!(Path::new("/c/d.txt"),  vp2.as_rooted_path());
+
+        let vp3 = VirtualPath::new("./c/../d.txt");
+        assert_eq!(Path::new("d.txt"),  vp3.as_rootless_path());
+        assert_eq!(Path::new("/d.txt"),  vp3.as_rooted_path());
+    }
+
+    #[test]
+    fn join_happy_path() {
+        let vp_file = VirtualPath::new("/tmp/a/b.txt");
+        let vp2 = vp_file.join("x/z.txt");
+        assert_eq!(Path::new("/tmp/a/x/z.txt"), vp2.as_rooted_path());
+    }
+
+    #[test]
+    fn join_file() {
+        let vp_dir = VirtualPath::new("/tmp/a/b/");
+        let vp2 = vp_dir.join("x/z.txt");
+        // the result is strange as vp2 is a directory.  Probably it is good.
+        assert_eq!(Path::new("/tmp/a/x/z.txt"), vp2.as_rooted_path());
+    }
+
+    #[test]
+    fn resolve(){
+        let vp = VirtualPath::new("/tmp/a/foo.typ");
+        assert_eq!(PathBuf::from("/tmp/a/tmp/a/foo.typ"),
+                   vp.resolve(Path::new("/tmp/a")).unwrap());
+
+        let vp2 = VirtualPath::new("tmp/a/foo.typ");
+        assert_eq!(PathBuf::from("/tmp/a/tmp/a/foo.typ"),
+                   vp2.resolve(Path::new("/tmp/a")).unwrap());
+
+        let vp3 = VirtualPath::new("../x/foo.typ");
+        assert!(vp3.resolve(Path::new("/tmp/a")).is_none());
+    }
+
+    #[test]
+    fn within_root(){
+        let root = Path::new("/tmp/a/b");
+
+        assert_eq!(VirtualPath::new("/x/foo.txt"),
+                   VirtualPath::within_root(Path::new("/tmp/a/b/x/foo.txt"), root).unwrap());
+
+        assert!(VirtualPath::within_root(Path::new("/no-tmp/a/b/x/foo.txt"), root).is_none());
+
+        assert!(VirtualPath::within_root(Path::new("../c"), root).is_none());
     }
 }
 
@@ -340,8 +413,8 @@ impl<'de> Deserialize<'de> for PackageVersion {
     }
 }
 
-pub const REMOTE_PACKAGE: PackageSpec = PackageSpec{
+pub const REMOTE_PACKAGE: PackageSpec = PackageSpec {
     namespace: EcoString::inline("typst-internals"),
     name: EcoString::inline("remote"),
-    version: PackageVersion{major: 1,minor: 0, patch: 1},
+    version: PackageVersion { major: 1, minor: 0, patch: 1 },
 };
