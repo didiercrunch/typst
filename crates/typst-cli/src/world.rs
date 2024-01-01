@@ -326,9 +326,9 @@ fn prepare_package_or_remote_file(id: FileId, fetcher: &HTTPRemoteAssetFetcher) 
     }
     let spec = id.package().unwrap();
     if spec == &REMOTE_PACKAGE {
-        let url_str = id.vpath().as_rootless_path().to_str().unwrap();
-        println!("here is the url: {}", url_str);
-        let url = Url::parse(url_str).unwrap();
+        let url_str = id.vpath().as_rootless_path();
+        println!("here is the url: {}", url_str.to_str().unwrap());
+        let url = Url::parse(url_str.to_str().unwrap()).unwrap();
         fetcher.fetch(&url).unwrap();
         return Ok(Some(fetcher.mirror_root()));
     }

@@ -371,6 +371,7 @@ impl<'a> codespan_reporting::files::Files<'a> for SystemWorld {
                 .resolve(self.root())
                 .and_then(|abs| pathdiff::diff_paths(abs, self.workdir()))
                 .as_deref()
+                .map(|p|PathBuf::from(p))
                 .unwrap_or_else(|| vpath.as_rootless_path())
                 .to_string_lossy()
                 .into()
