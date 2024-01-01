@@ -1,5 +1,23 @@
 //! Evaluation of markup and code.
 
+use comemo::{Track, Tracked, TrackedMut};
+
+use crate::diag::{bail, SourceResult};
+use crate::engine::{Engine, Route};
+use crate::foundations::{Cast, Module, NativeElement, Scope, Scopes, Value};
+use crate::introspection::{Introspector, Locator};
+use crate::math::EquationElem;
+use crate::syntax::{ast, parse, parse_code, parse_math, Source, Span};
+use crate::World;
+
+pub(crate) use self::access::*;
+pub(crate) use self::binding::*;
+pub use self::call::*;
+pub(crate) use self::flow::*;
+pub use self::import::*;
+pub use self::tracer::*;
+pub use self::vm::*;
+
 pub(crate) mod ops;
 
 mod access;
@@ -14,25 +32,6 @@ mod rules;
 mod tracer;
 mod vm;
 mod importurl;
-
-pub use self::call::*;
-pub use self::import::*;
-pub use self::tracer::*;
-pub use self::vm::*;
-
-pub(crate) use self::access::*;
-pub(crate) use self::binding::*;
-pub(crate) use self::flow::*;
-
-use comemo::{Track, Tracked, TrackedMut};
-
-use crate::diag::{bail, SourceResult};
-use crate::engine::{Engine, Route};
-use crate::foundations::{Cast, Module, NativeElement, Scope, Scopes, Value};
-use crate::introspection::{Introspector, Locator};
-use crate::math::EquationElem;
-use crate::syntax::{ast, parse, parse_code, parse_math, Source, Span};
-use crate::World;
 
 /// Evaluate a source file and return the resulting module.
 #[comemo::memoize]
@@ -80,10 +79,12 @@ pub fn eval(
         bail!(flow.forbidden());
     }
 
-    // Assemble the module.
-    let name = id
+    let id_path = id
         .vpath()
-        .as_rootless_path()
+        .as_rootless_path();
+
+    // Assemble the module.
+    let name = id_path
         .file_stem()
         .unwrap_or_default()
         .to_string_lossy();

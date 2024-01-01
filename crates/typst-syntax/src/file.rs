@@ -114,7 +114,7 @@ impl Debug for FileId {
 
 /// An absolute path in the virtual file system of a project or package.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
-pub struct VirtualPath(PathBuf);
+pub struct VirtualPath(Url);
 
 impl VirtualPath {
     /// Create a new virtual path.
@@ -141,7 +141,7 @@ impl VirtualPath {
                 Component::Normal(_) => out.push(component),
             }
         }
-        Self(out)
+        Self(Url::from_file_path(out).unwrap())
     }
 
     /// Create a virtual path from a real path and a real root.
@@ -154,13 +154,17 @@ impl VirtualPath {
     }
 
     /// Get the underlying path with a leading `/` or `\`.
-    pub fn as_rooted_path(&self) -> &Path {
-        &self.0
+    pub fn as_rooted_path(&self) -> PathBuf {
+        self.0.to_file_path().unwrap()
+        // Path::new(self.0.to_file_path())
     }
 
     /// Get the underlying path without a leading `/` or `\`.
-    pub fn as_rootless_path(&self) -> &Path {
-        self.0.strip_prefix(Component::RootDir).unwrap_or(&self.0)
+    pub fn as_rootless_path(&self) -> PathBuf {
+        let rooted_path = self.as_rooted_path();
+        rooted_path.strip_prefix(Component::RootDir)
+            .map(|x|x.to_path_buf())
+            .unwrap_or(rooted_path)
     }
 
     /// Resolve the virtual path relative to an actual file system root
@@ -171,7 +175,7 @@ impl VirtualPath {
     pub fn resolve(&self, root: &Path) -> Option<PathBuf> {
         let root_len = root.as_os_str().len();
         let mut out = root.to_path_buf();
-        for component in self.0.components() {
+        for component in self.as_rooted_path().components() {
             match component {
                 Component::Prefix(_) => {}
                 Component::RootDir => {}
@@ -190,7 +194,7 @@ impl VirtualPath {
 
     /// Resolve a path relative to this virtual path.
     pub fn join(&self, path: impl AsRef<Path>) -> Self {
-        if let Some(parent) = self.0.parent() {
+        if let Some(parent) = self.as_rooted_path().parent() {
             Self::new(parent.join(path))
         } else {
             Self::new(path)
@@ -200,7 +204,7 @@ impl VirtualPath {
 
 impl Debug for VirtualPath {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        Display::fmt(&self.0.display(), f)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -275,6 +279,23 @@ mod tests_virtual_path {
         assert!(VirtualPath::within_root(Path::new("/no-tmp/a/b/x/foo.txt"), root).is_none());
 
         assert!(VirtualPath::within_root(Path::new("../c"), root).is_none());
+    }
+
+    #[test]
+    fn url_escaped_char(){
+        let vp = VirtualPath::new("/tmp/a/#foo.typ");
+        assert_eq!(Path::new("/tmp/a/#foo.typ"), vp.as_rooted_path());
+
+        let vp2 = VirtualPath::new("/tmp/a/?foo.typ");
+        assert_eq!(Path::new("/tmp/a/?foo.typ"), vp2.as_rooted_path());
+    }
+
+    #[test]
+    fn join_with_file_with_url_escaped_char() {
+        let vp_dir = VirtualPath::new("/tmp/#a/b/");
+        let vp2 = vp_dir.join("x?/z.txt");
+        // the result is strange as vp2 is a directory.  Probably it is good.
+        assert_eq!(Path::new("/tmp/#a/x?/z.txt"), vp2.as_rooted_path());
     }
 }
 
