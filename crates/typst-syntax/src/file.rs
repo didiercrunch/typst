@@ -79,10 +79,6 @@ impl FileId {
 
     /// Resolve a file location relative to this file.
     pub fn join(self, path: &str) -> Self {
-        if self.is_remote(path) { // todo: make sense of this shit.
-            return Self::new(self.package().cloned(), VirtualPath::new(path));
-        }
-
         Self::new(self.package().cloned(), self.vpath().join(path))
     }
 
@@ -210,6 +206,18 @@ impl VirtualPath {
 
     /// Resolve a path relative to this virtual path.
     pub fn join(&self, path: impl AsRef<Path>) -> Self {
+        if let Ok(url) = Url::parse(path.as_ref().to_str().unwrap_or("")) {
+            return Self(url);
+        }
+
+        if self.is_remote() {
+            let mut ret = self.0.clone();
+            let new_path = Path::new(ret.path()).parent().unwrap_or(Path::new("/")).join(path);
+            ret.set_path(new_path.to_str().unwrap_or(""));
+            println!("Here! {} ", ret);
+            return Self(ret);
+        }
+
         if let Some(parent) = self.as_rooted_path().parent() {
             Self::new(parent.join(path))
         } else {
@@ -286,6 +294,22 @@ mod tests_virtual_path {
         let vp2 = vp_dir.join("x/z.txt");
         // the result is strange as vp2 is a directory.  Probably it is good.
         assert_eq!(Path::new("/tmp/a/x/z.txt"), vp2.as_rooted_path());
+    }
+
+    #[test]
+    fn join_two_remotes_files(){
+        let vp1 = VirtualPath::new("https://example.com/a/foo.typ");
+        let vp2 = vp1.join("https://example.com/a/foo.typ");
+        // the result is strange as vp2 is a directory.  Probably it is good.
+        assert_eq!("https://example.com/a/foo.typ", format!("{}", vp2));
+    }
+
+    #[test]
+    fn join_one_remote_file_to_one_local_file(){
+        let vp1 = VirtualPath::new("https://example.com/a/foo.typ");
+        let vp2 = vp1.join("./b/toto.typ");
+        // the result is strange as vp2 is a directory.  Probably it is good.
+        assert_eq!("https://example.com/a/b/toto.typ", format!("{}", vp2));
     }
 
     #[test]
