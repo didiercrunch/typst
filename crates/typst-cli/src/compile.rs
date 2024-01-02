@@ -363,8 +363,8 @@ impl<'a> codespan_reporting::files::Files<'a> for SystemWorld {
 
     fn name(&'a self, id: FileId) -> CodespanResult<Self::Name> {
         let vpath = id.vpath();
-        Ok(if let Some(package) = id.package() {
-            format!("{package}{}", vpath.as_rooted_path().display())
+        Ok(if vpath.is_remote() || id.package().is_some() {
+            format!("{}", id)
         } else {
             // Try to express the path relative to the working directory.
             vpath

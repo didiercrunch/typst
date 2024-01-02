@@ -1,4 +1,3 @@
-use std::path::Path;
 use comemo::TrackedMut;
 use ecow::{eco_format, eco_vec, EcoString};
 use serde::{Deserialize, Serialize};
@@ -153,25 +152,6 @@ fn import_package(vm: &mut Vm, spec: PackageSpec, span: Span) -> SourceResult<Mo
     .with_name(manifest.package.name))
 }
 
-const SUPPORTED_SCHEMATA: [&str; 2] = ["http", "https"];
-
-// fn download_file_id_url(path: &str) -> StrResult<()>{
-//     if Url::parse(path).is_err() {
-//         println!("This is not an valid url.. this is strange. {}", path);
-//         return Ok(());
-//     }
-//     let url = Url::parse(path).unwrap();
-//     if !SUPPORTED_SCHEMATA.contains(&url.scheme()) {
-//         println!("invalid url schema {}", url.scheme());
-//         return Ok(());
-//     }
-//
-//     let fetcher = HTTPRemoteAssetFetcher::new(Path::new("/tmp/toto"));
-//     fetcher.fetch(&url)?;
-//
-//     Ok(())
-//
-// }
 
 /// Import a file from a path.
 fn import_file(vm: &mut Vm, path: &str, span: Span) -> SourceResult<Module> {

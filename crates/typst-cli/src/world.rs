@@ -1,19 +1,19 @@
+use std::{fs, mem};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use std::{fs, mem};
 
-use chrono::{DateTime, Datelike, Local};
+use chrono::{Datelike, DateTime, Local};
 use comemo::Prehashed;
 use ecow::eco_format;
 use parking_lot::Mutex;
-use url::Url;
-use typst::diag::{FileError, FileResult, PackageResult, StrResult};
-use typst::foundations::{Bytes, Datetime, Dict, IntoValue};
-use typst::syntax::{FileId, Source, VirtualPath, REMOTE_PACKAGE};
-use typst::text::{Font, FontBook};
+
 use typst::{Library, World};
 use typst_timing::{timed, TimingScope};
+use typst::diag::{FileError, FileResult, StrResult};
+use typst::foundations::{Bytes, Datetime, Dict, IntoValue};
+use typst::syntax::{FileId, Source, VirtualPath};
+use typst::text::{Font, FontBook};
 
 use crate::args::SharedArgs;
 use crate::compile::ExportCache;
@@ -86,7 +86,7 @@ impl SystemWorld {
 
             Library::builder().with_inputs(inputs).build()
         };
-        let pb = PathBuf::from("/tmp/some-shit");
+        let pb = PathBuf::from("/tmp/typst-001");
         let fetcher = HTTPRemoteAssetFetcher::new(pb);
 
         Ok(Self {
@@ -320,21 +320,6 @@ impl<T: Clone> SlotCell<T> {
 }
 
 
-fn prepare_package_or_remote_file(id: FileId, fetcher: &HTTPRemoteAssetFetcher) -> PackageResult<Option<PathBuf>>{
-    if id.package().is_none() {
-        return Ok(None)
-    }
-    let spec = id.package().unwrap();
-    if spec == &REMOTE_PACKAGE {
-        let url_str = id.vpath().as_rootless_path();
-        println!("here is the url: {}", url_str.to_str().unwrap());
-        let url = Url::parse(url_str.to_str().unwrap()).unwrap();
-        fetcher.fetch(&url).unwrap();
-        return Ok(Some(fetcher.mirror_root()));
-    }
-    prepare_package(spec).map(|x| Some(x))
-}
-
 // todo: download file if not present.
 /// Resolves the path of a file id on the system, downloading a package if
 /// necessary.
@@ -354,21 +339,12 @@ fn system_path_old(project_root: &Path, id: FileId) -> FileResult<PathBuf> {
 }
 
 fn system_path(project_root: &Path, id: FileId, fetcher: &HTTPRemoteAssetFetcher) -> FileResult<PathBuf> {
-    // println!("fuck me");
-    // Determine the root path relative to which the file path
-    // will be resolved.
-    // let p = PathBuf::from("/tmp/hello");
-    // let fetcher = HTTPRemoteAssetFetcher::new(p);
-    let root = prepare_package_or_remote_file(id, fetcher)?
-        .unwrap_or(PathBuf::from(project_root));
-    // if let Some(spec) = id.package() {
-    //     buf = prepare_package(spec)?;
-    //     root = &buf;
-    // }
-
-    // Join the path to the root. If it tries to escape, deny
-    // access. Note: It can still escape via symlinks.
-    id.vpath().resolve(root.as_path()).ok_or(FileError::AccessDenied)
+    if id.vpath().is_remote() {
+        let url = id.vpath().as_url();
+        println!("Downloading: {}", url);
+        return Ok(fetcher.fetch(&url).unwrap());
+    }
+    return system_path_old(project_root, id);
 }
 
 /// Read a file.

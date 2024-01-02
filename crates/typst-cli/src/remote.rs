@@ -18,10 +18,6 @@ impl AssetMirror {
         return AssetMirror { root: path };
     }
 
-    fn can_mirror(&self, url: &Url) -> bool {
-        url.host_str().is_some()
-    }
-
     fn path_for<'a>(&self, url: &Url) -> PathBuf {
         self.root.as_path()
             .join(url.host_str().unwrap())
@@ -61,16 +57,6 @@ mod tests_asset_mirror {
         assert_eq!(ret, expt);
     }
 
-    #[test]
-    fn can_mirror() {
-        let asset_mirror = AssetMirror::new(PathBuf::from("/tmp/typst"));
-
-        let url_1 = Url::parse("file:///a/b/doc.typ").unwrap();
-        assert!(!asset_mirror.can_mirror(&url_1));
-
-        let url_2 = Url::parse("https://example.com:9876/a/b/doc.typ").unwrap();
-        assert!(asset_mirror.can_mirror(&url_2));
-    }
 }
 
 
@@ -90,10 +76,6 @@ impl HTTPRemoteAssetFetcher {
             _agent: agent,
             mirror: AssetMirror::new(root),
         }
-    }
-
-    pub fn mirror_root(&self) -> PathBuf {
-        PathBuf::from(self.mirror.root.clone())
     }
 
     fn _create_named_temp_file(&self) -> StrResult<NamedTempFile> {
@@ -132,7 +114,6 @@ impl HTTPRemoteAssetFetcher {
         }
         Ok(())
     }
-
 
     fn download_response(&self, resp: Response, url: &Url) -> StrResult<PathBuf> {
         let temp_file = self._download_response_in_temp_file(resp, url)?;

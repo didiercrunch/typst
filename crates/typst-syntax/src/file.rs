@@ -79,8 +79,8 @@ impl FileId {
 
     /// Resolve a file location relative to this file.
     pub fn join(self, path: &str) -> Self {
-        if self.is_remote(path) {
-            return Self::new(Some(REMOTE_PACKAGE), VirtualPath::new(path));
+        if self.is_remote(path) { // todo: make sense of this shit.
+            return Self::new(self.package().cloned(), VirtualPath::new(path));
         }
 
         Self::new(self.package().cloned(), self.vpath().join(path))
@@ -112,6 +112,16 @@ impl Debug for FileId {
     }
 }
 
+impl Display for FileId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if let Some(package) = self.package() {
+            write!(f, "[{}] {}", package, self.vpath())
+        } else {
+            write!(f, "[] {}", self.vpath())
+        }
+    }
+}
+
 /// An absolute path in the virtual file system of a project or package.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct VirtualPath(Url);
@@ -127,6 +137,10 @@ impl VirtualPath {
 
     /// Non generic new implementation.
     fn new_impl(path: &Path) -> Self {
+        if let Ok(url) = Url::parse(path.to_str().unwrap_or("")) {
+            return Self(url);
+        }
+
         let mut out = Path::new(&Component::RootDir).to_path_buf();
         for component in path.components() {
             match component {
@@ -155,8 +169,10 @@ impl VirtualPath {
 
     /// Get the underlying path with a leading `/` or `\`.
     pub fn as_rooted_path(&self) -> PathBuf {
+        if self.is_remote() { // todo: add shitload of tests
+            return PathBuf::from(self.0.path());
+        }
         self.0.to_file_path().unwrap()
-        // Path::new(self.0.to_file_path())
     }
 
     /// Get the underlying path without a leading `/` or `\`.
@@ -199,6 +215,23 @@ impl VirtualPath {
         } else {
             Self::new(path)
         }
+    }
+
+    pub fn is_remote(&self) -> bool {
+        self.0.scheme() == "http" || self.0.scheme() == "https"
+    }
+
+    pub fn as_url(&self) -> &Url {
+        &self.0
+    }
+}
+
+impl Display for VirtualPath {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.is_remote() {
+            return write!(f, "{}", self.0);
+        }
+        write!(f, "{}", self.as_rooted_path().to_str().unwrap_or(""))
     }
 }
 
@@ -296,6 +329,27 @@ mod tests_virtual_path {
         let vp2 = vp_dir.join("x?/z.txt");
         // the result is strange as vp2 is a directory.  Probably it is good.
         assert_eq!(Path::new("/tmp/#a/x?/z.txt"), vp2.as_rooted_path());
+    }
+
+    #[test]
+    fn is_remote() {
+        let vp_file = VirtualPath::new("/tmp/a/foo.txt");
+        assert!(!vp_file.is_remote());
+
+        let vp_https = VirtualPath::new("https://google.com/tmp/a/foo.txt");
+        assert!(vp_https.is_remote());
+
+        let vp_http = VirtualPath::new("http://google.com/tmp/a/foo.txt");
+        assert!(vp_http.is_remote());
+    }
+
+    #[test]
+    fn display_trait() {
+        let vp_file = VirtualPath::new("/tmp/a/foo.txt");
+        assert_eq!("/tmp/a/foo.txt", format!("{}", vp_file));
+
+        let vp_https = VirtualPath::new("https://google.com/tmp/a/foo.txt");
+        assert_eq!("https://google.com/tmp/a/foo.txt", format!("{}", vp_https));
     }
 }
 
