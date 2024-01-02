@@ -152,12 +152,9 @@ fn import_package(vm: &mut Vm, spec: PackageSpec, span: Span) -> SourceResult<Mo
     .with_name(manifest.package.name))
 }
 
-
 /// Import a file from a path.
 fn import_file(vm: &mut Vm, path: &str, span: Span) -> SourceResult<Module> {
     // Load the source file.
-    // download_file_id_url(path).at(span)?;
-
     let world = vm.world();
     let id = span.resolve_path(path).at(span)?;
     let source = world.source(id).at(span)?;

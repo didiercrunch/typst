@@ -31,7 +31,6 @@ mod math;
 mod rules;
 mod tracer;
 mod vm;
-mod importurl;
 
 /// Evaluate a source file and return the resulting module.
 #[comemo::memoize]
