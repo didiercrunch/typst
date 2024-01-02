@@ -12,7 +12,7 @@ mod reparser;
 mod source;
 mod span;
 
-pub use self::file::{FileId, PackageSpec, PackageVersion, VirtualPath, REMOTE_PACKAGE};
+pub use self::file::{FileId, PackageSpec, PackageVersion, VirtualPath};
 pub use self::highlight::{highlight, highlight_html, Tag};
 pub use self::kind::SyntaxKind;
 pub use self::lexer::{

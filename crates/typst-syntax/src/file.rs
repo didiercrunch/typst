@@ -512,8 +512,3 @@ impl<'de> Deserialize<'de> for PackageVersion {
     }
 }
 
-pub const REMOTE_PACKAGE: PackageSpec = PackageSpec {
-    namespace: EcoString::inline("typst-internals"),
-    name: EcoString::inline("remote"),
-    version: PackageVersion { major: 1, minor: 0, patch: 1 },
-};
