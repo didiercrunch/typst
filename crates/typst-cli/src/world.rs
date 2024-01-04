@@ -342,7 +342,7 @@ fn system_path(project_root: &Path, id: FileId, fetcher: &HTTPRemoteAssetFetcher
     if id.vpath().is_remote() {
         let url = id.vpath().as_url();
         println!("Downloading: {}", url);
-        return Ok(fetcher.fetch(&url).unwrap());
+        return fetcher.fetch(&url)
     }
     return system_path_old(project_root, id);
 }

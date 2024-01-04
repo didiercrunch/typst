@@ -1,13 +1,15 @@
 use std::{fs, io};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use ecow::{eco_format, EcoString};
 
 use tempfile::{NamedTempFile};
 use ureq;
 use ureq::{Error, Response};
 use url::Url;
 
-use typst::diag::{bail, StrResult};
+use typst::diag::{FileError, FileResult};
+use typst::diag::FileError::Other;
 
 struct AssetMirror {
     root: PathBuf,
@@ -65,6 +67,10 @@ pub struct HTTPRemoteAssetFetcher {
     mirror: AssetMirror,
 }
 
+fn other_err(msg: EcoString) -> FileError {
+    Other(Some(msg))
+}
+
 impl HTTPRemoteAssetFetcher {
 
     pub fn new(root: PathBuf) -> HTTPRemoteAssetFetcher {
@@ -78,56 +84,51 @@ impl HTTPRemoteAssetFetcher {
         }
     }
 
-    fn _create_named_temp_file(&self) -> StrResult<NamedTempFile> {
+    fn _create_named_temp_file(&self) -> FileResult<NamedTempFile> {
         let temp_file_res = NamedTempFile::new();
-
-        if temp_file_res.is_err() {
-            bail!("Cannot create temporary file: {}", temp_file_res.err().unwrap());
-        }
-        Ok(temp_file_res.unwrap())
+        temp_file_res.map_err(|err| other_err(eco_format!("Cannot create temporary file: {}", err)))
     }
 
-    fn _download_response_in_temp_file(&self, resp: Response, url: &Url) -> StrResult<NamedTempFile>{
+    fn _download_response_in_temp_file(&self, resp: Response, url: &Url) -> FileResult<NamedTempFile>{
         let mut file = self._create_named_temp_file()?;
         let copy_res = io::copy(resp.into_reader().as_mut(),
                                 &mut file);
-        if copy_res.is_err() {
-            bail!("Error while downloading {}.", url);
-        }
-        Ok(file)
+
+        copy_res.map_err(|_| other_err(eco_format!("Error while downloading {}.", url)))
+            .map( |_| file)
     }
 
-    fn _move_file(&self, from: &Path, to: &Path) -> StrResult<()>{
+    fn _move_file(&self, from: &Path, to: &Path) -> FileResult<()>{
         if let Some(parent) = to.parent(){
             let res = fs::create_dir_all(parent);
             if res.is_err() {
-                bail!("Could not create directory {}", parent.to_str().unwrap_or(""));
+                return Err(other_err(eco_format!("Could not create directory {}", parent.to_str().unwrap_or(""))));
             }
         }
         let mv_resp = fs::rename(from, to);
         if mv_resp.is_err() {
             _ = fs::remove_file(to);
-            bail!("Could not move file {} in expected location {}",
+            return Err(other_err(eco_format!("Could not move file {} in expected location {}",
                 from.to_str().unwrap_or(""),
                 to.to_str().unwrap_or("")
-            );
+            )));
         }
         Ok(())
     }
 
-    fn download_response(&self, resp: Response, url: &Url) -> StrResult<PathBuf> {
+    fn download_response(&self, resp: Response, url: &Url) -> FileResult<PathBuf> {
         let temp_file = self._download_response_in_temp_file(resp, url)?;
         let file = self.mirror.path_for(url);
         self._move_file(temp_file.path(), file.as_path())?;
         Ok(file)
     }
 
-    pub fn fetch(&self, url: &Url) -> StrResult<PathBuf> {
+    pub fn fetch(&self, url: &Url) -> FileResult<PathBuf> {
         let res = self._agent.get(url.as_str()).call();
         match res {
             Ok(response) => self.download_response(response, url),
-            Err(Error::Status(code, _)) => bail!("Error {} downloding asset at {}", code, url),
-            Err(_) => bail!("Connection error to {}", url),
+            Err(Error::Status(code, _)) => Err(other_err(eco_format!("Error {} downloding asset at {}", code, url))),
+            Err(_) => Err(other_err(eco_format!("Connection error to {}", url))),
         }
     }
 }
