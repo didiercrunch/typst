@@ -1,23 +1,25 @@
+use std::{fs, mem};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use std::{fs, mem};
 
-use chrono::{DateTime, Datelike, Local};
+use chrono::{Datelike, DateTime, Local};
 use comemo::Prehashed;
 use ecow::eco_format;
 use parking_lot::Mutex;
+
+use typst::{Library, World};
+use typst_timing::{timed, TimingScope};
 use typst::diag::{FileError, FileResult, StrResult};
 use typst::foundations::{Bytes, Datetime, Dict, IntoValue};
 use typst::syntax::{FileId, Source, VirtualPath};
 use typst::text::{Font, FontBook};
-use typst::{Library, World};
-use typst_timing::{timed, TimingScope};
 
 use crate::args::SharedArgs;
 use crate::compile::ExportCache;
 use crate::fonts::{FontSearcher, FontSlot};
 use crate::package::prepare_package;
+use crate::remote::HTTPRemoteAssetFetcher;
 
 /// A world that provides access to the operating system.
 pub struct SystemWorld {
@@ -43,6 +45,8 @@ pub struct SystemWorld {
     /// The export cache, used for caching output files in `typst watch`
     /// sessions.
     export_cache: ExportCache,
+
+    fetcher: HTTPRemoteAssetFetcher,
 }
 
 impl SystemWorld {
@@ -82,6 +86,8 @@ impl SystemWorld {
 
             Library::builder().with_inputs(inputs).build()
         };
+        let pb = PathBuf::from("/tmp/typst-001");
+        let fetcher = HTTPRemoteAssetFetcher::new(pb);
 
         Ok(Self {
             workdir: std::env::current_dir().ok(),
@@ -94,6 +100,7 @@ impl SystemWorld {
             slots: Mutex::new(HashMap::new()),
             now: OnceLock::new(),
             export_cache: ExportCache::new(),
+            fetcher,
         })
     }
 
@@ -118,7 +125,7 @@ impl SystemWorld {
             .get_mut()
             .values()
             .filter(|slot| slot.accessed())
-            .filter_map(|slot| system_path(&self.root, slot.id).ok())
+            .filter_map(|slot| system_path(&self.root, slot.id, &self.fetcher).ok())
     }
 
     /// Reset the compilation state in preparation of a new compilation.
@@ -160,11 +167,11 @@ impl World for SystemWorld {
     }
 
     fn source(&self, id: FileId) -> FileResult<Source> {
-        self.slot(id, |slot| slot.source(&self.root))
+        self.slot(id, |slot| slot.source(&self.root, &self.fetcher))
     }
 
     fn file(&self, id: FileId) -> FileResult<Bytes> {
-        self.slot(id, |slot| slot.file(&self.root))
+        self.slot(id, |slot| slot.file(&self.root, &self.fetcher))
     }
 
     fn font(&self, index: usize) -> Option<Font> {
@@ -229,9 +236,9 @@ impl FileSlot {
     }
 
     /// Retrieve the source for this file.
-    fn source(&mut self, project_root: &Path) -> FileResult<Source> {
+    fn source(&mut self, project_root: &Path, fetcher: &HTTPRemoteAssetFetcher) -> FileResult<Source> {
         self.source.get_or_init(
-            || system_path(project_root, self.id),
+            || system_path(project_root, self.id, fetcher),
             |data, prev| {
                 let name = if prev.is_some() { "reparsing file" } else { "parsing file" };
                 let _scope = TimingScope::new(name, None);
@@ -247,9 +254,9 @@ impl FileSlot {
     }
 
     /// Retrieve the file's bytes.
-    fn file(&mut self, project_root: &Path) -> FileResult<Bytes> {
+    fn file(&mut self, project_root: &Path, fetcher: &HTTPRemoteAssetFetcher) -> FileResult<Bytes> {
         self.file
-            .get_or_init(|| system_path(project_root, self.id), |data, _| Ok(data.into()))
+            .get_or_init(|| system_path(project_root, self.id, fetcher), |data, _| Ok(data.into()))
     }
 }
 
@@ -312,9 +319,11 @@ impl<T: Clone> SlotCell<T> {
     }
 }
 
+
+// todo: download file if not present.
 /// Resolves the path of a file id on the system, downloading a package if
 /// necessary.
-fn system_path(project_root: &Path, id: FileId) -> FileResult<PathBuf> {
+fn system_path_old(project_root: &Path, id: FileId) -> FileResult<PathBuf> {
     // Determine the root path relative to which the file path
     // will be resolved.
     let buf;
@@ -327,6 +336,15 @@ fn system_path(project_root: &Path, id: FileId) -> FileResult<PathBuf> {
     // Join the path to the root. If it tries to escape, deny
     // access. Note: It can still escape via symlinks.
     id.vpath().resolve(root).ok_or(FileError::AccessDenied)
+}
+
+fn system_path(project_root: &Path, id: FileId, fetcher: &HTTPRemoteAssetFetcher) -> FileResult<PathBuf> {
+    if id.vpath().is_remote() {
+        let url = id.vpath().as_url();
+        println!("Downloading: {}", url);
+        return fetcher.fetch(&url)
+    }
+    return system_path_old(project_root, id);
 }
 
 /// Read a file.

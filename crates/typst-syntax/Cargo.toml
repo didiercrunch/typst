@@ -25,6 +25,7 @@ unicode-math-class = { workspace = true }
 unicode-script = { workspace = true }
 unicode-segmentation = { workspace = true }
 unscanny = { workspace = true }
+url = "2.5.0"
 
 [lints]
 workspace = true

@@ -20,7 +20,6 @@ impl Eval for ast::ModuleImport<'_> {
         let mut source = source.eval(vm)?;
         let new_name = self.new_name();
         let imports = self.imports();
-
         match &source {
             Value::Func(func) => {
                 if func.scope().is_none() {

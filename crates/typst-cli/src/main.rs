@@ -9,6 +9,7 @@ mod timings;
 mod update;
 mod watch;
 mod world;
+mod remote;
 
 use std::cell::Cell;
 use std::io::{self, IsTerminal, Write};
